@@ -1040,7 +1040,13 @@ public:
             if (! getHostType().isReceptor())
                 addMouseListener (this, true);
            #endif
-
+            #if JUCE_MAC
+            if (getHostType().type >= PluginHostType::SteinbergCubase10
+                && getHostType().type <= PluginHostType::SteinbergCubaseGeneric
+                )
+                cubaseWorkaround.reset (new CubaseWindowResizeWorkaround (*this));
+           #endif
+            
             setOpaque (true);
             ignoreUnused (fakeMouseGenerator);
         }
@@ -1187,6 +1193,9 @@ public:
 
                #if JUCE_MAC
                 resizeHostWindow (editorBounds.getWidth(), editorBounds.getHeight()); // (doing this a second time seems to be necessary in tracktion)
+                
+                if (cubaseWorkaround != nullptr)
+                        cubaseWorkaround->triggerAsyncUpdate();
                #endif
             }
         }
@@ -1364,6 +1373,25 @@ public:
        #else
         using HostWindowType = void*;
        #endif
+        
+        #if JUCE_MAC
+        // On macOS Cubase 10 over happens same issue heppened on vst3 before 954663b8bb36cdc3f62f2211a8749a8d4db29317
+        // Add similar workaround.
+        struct CubaseWindowResizeWorkaround  : public AsyncUpdater
+        {
+            CubaseWindowResizeWorkaround (EditorCompWrapper& o)  : owner (o) {}
+
+            void handleAsyncUpdate() override
+            {
+                if (auto* peer = owner.getPeer())
+                    peer->updateBounds();
+            }
+
+            EditorCompWrapper& owner;
+        };
+
+        std::unique_ptr<CubaseWindowResizeWorkaround> cubaseWorkaround;
+        #endif
 
         HostWindowType hostWindow = {};
 
